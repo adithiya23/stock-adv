@@ -26,6 +26,8 @@ st.markdown("""
     .chart-container { border-radius: 8px; overflow: hidden; margin: 10px 0; }
     .footer { text-align: center; padding: 20px; color: #7f8c8d; font-size: 0.8rem; }
     .stSidebarTitle { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+    .news-link { color: #1a0dab; text-decoration: underline; font-weight: bold; }
+    .tech-indicator { color: #2c3e50; font-size: 0.9rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -120,6 +122,22 @@ def get_date_range_filter(label="Date Range"):
     with col2:
         end_date = st.date_input("End Date", value=datetime.now())
     return start_date, end_date
+
+def add_moving_average_trace(hist, chart_type, fig, ticker, ma_periods=[20, 50, 200]):
+    """Add moving average lines to the chart"""
+    colors = ['red', 'orange', 'green']
+    labels = [f'{p}-Day SMA' for p in ma_periods]
+    
+    if chart_type == "Candlestick":
+        # For candlestick, we add SMA on close prices
+        for period, color, label in zip(ma_periods, colors, labels):
+            sma = hist['Close'].rolling(window=period).mean()
+            fig.add_trace(go.Scatter(x=hist.index, y=sma, mode='lines', name=label, line=dict(color=color, width=1.5)), row=1, col=1)
+    else:
+        # For line/bar/area/OHLC, add SMA on close
+        for period, color, label in zip(ma_periods, colors, labels):
+            sma = hist['Close'].rolling(window=period).mean()
+            fig.add_trace(go.Scatter(x=hist.index, y=sma, mode='lines', name=label, line=dict(color=color, width=1.5)))
 
 def page_home():
     st.title("📈 Stock Advisor Pro - Complete Analysis Platform")
@@ -277,32 +295,48 @@ def page_analysis():
                 if not hist.empty:
                     chart_type = st.selectbox("Chart Type", ["Candlestick", "Line", "Bar", "Area", "OHLC"], index=0, key=f"chart_{analysis['ticker']}")
                     fig = go.Figure()
-                    price_col = 'Close' if chart_type != 'Candlestick' else None
                     
+                    # Add price chart based on type
                     if chart_type == "Candlestick":
                         fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'], name=analysis['ticker']))
+                        add_moving_average_trace(hist, chart_type, fig, analysis['ticker'])
                     elif chart_type == "Line":
                         fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name=analysis['ticker'], line=dict(color='blue')))
+                        add_moving_average_trace(hist, chart_type, fig, analysis['ticker'])
                     elif chart_type == "Bar":
                         fig.add_trace(go.Bar(x=hist.index, y=hist['Close'], name=analysis['ticker']))
+                        add_moving_average_trace(hist, chart_type, fig, analysis['ticker'])
                     elif chart_type == "Area":
                         fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', fill='tozeroy', name=analysis['ticker'], line=dict(color='blue')))
+                        add_moving_average_trace(hist, chart_type, fig, analysis['ticker'])
                     elif chart_type == "OHLC":
                         fig.add_trace(go.Ohlc(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'], name=analysis['ticker']))
+                        add_moving_average_trace(hist, chart_type, fig, analysis['ticker'])
                     
                     fig.update_layout(
-                        title=f"{analysis['ticker']} - {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')} {chart_type} Chart",
+                        title=f"{analysis['ticker']} - {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')} {chart_type} Chart with Moving Averages",
                         xaxis_title="Date",
                         yaxis_title="Price (₹)",
-                        height=450,
+                        height=500,
                         template="plotly_white",
-                        xaxis_rangeslider_visible=False
+                        xaxis_rangeslider_visible=False,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("No data available for the selected date range")
             except Exception as e:
                 st.info("Chart data unavailable")
+            
+            # News Search Links
+            st.markdown("### 📰 News & Research")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown('[🔍 Google News Search](https://www.google.com/search?q=' + analysis['ticker'] + '+stock+news)')
+            with col2:
+                st.markdown('[📊 Moneycontrol](https://www.moneycontrol.com/quote/stock/india/' + analysis['ticker'].lower() + '.html)')
+            with col3:
+                st.markdown('[🌐 NSE India](https://www.nseindia.com/companies-listing/compomexchange?symbol=' + analysis['ticker'] + ')')
             
             st.markdown("### Additional Information")
             col1, col2 = st.columns(2)
